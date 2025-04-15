@@ -189,12 +189,12 @@ exit /b -999
 
 :getDriveLetter <%1 = disk partition name> <%2 = [out] drive letter>
 set %~2=&
-for /f "tokens=1 delims=:" %%l in ('powershell -NoProfile ^(Get-CimInstance -Query """Associators of {Win32_DiskPartition.DeviceID='%~1'} Where ResultClass=Win32_LogicalDisk"""^).Name 2^> nul') do set "%~2=%%~l"& exit /b 0
+for /f "tokens=1 delims=:" %%l in ('powershell -NoProfile ^(Get-CimInstance Win32_DiskPartition -Filter """DeviceID='%~1'""" ^^^| Get-CimAssociatedInstance -ResultClassName Win32_LogicalDisk^).Name 2^> nul') do set "%~2=%%~l"& exit /b 0
 exit /b -999
 
 :getPartitionName <%1 = drive letter> <%2 = [out] disk 0-based index> <%3 = [out] disk partition 0-based index> <%4 = [out] disk partition name>
 set %~2=& set %~3=& set %~4=&
-for /f "tokens=2,4 delims=#," %%i in ('powershell -NoProfile ^(Get-CimInstance -Query """Associators of {Win32_LogicalDisk.DeviceID='%~1:'} Where ResultClass=Win32_DiskPartition"""^).Name 2^> nul') do (
+for /f "tokens=2,4 delims=#," %%i in ('powershell -NoProfile ^(Get-CimInstance Win32_LogicalDisk -Filter """DeviceID='%~1:'""" ^^^| Get-CimAssociatedInstance -ResultClassName Win32_DiskPartition^).Name 2^> nul') do (
 	set "%~2=%%~i"
 	set "%~3=%%~j"
 	set "%~4=Disk #%%~i, Partition #%%~j"
