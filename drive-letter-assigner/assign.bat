@@ -194,7 +194,7 @@ exit /b -999
 
 :getPartitionName <%1 = drive letter> <%2 = [out] disk number> <%3 = [out] disk partition number> <%4 = [out] disk partition name>
 set %~2=& set %~3=& set %~4=&
-for /f "eol=- skip=2 tokens=1,2" %%i in ('powershell -command "Get-CimInstance MSFT_Volume -Namespace root\Microsoft\Windows\Storage -Filter 'DriveLetter=\"%~1\"' -Property ObjectId | ForEach-Object { Get-CimInstance -Query ('Associators of {{MSFT_Volume.ObjectId=\"{0}\"}} Where ResultClass=MSFT_Partition' -f $($_.ObjectId -replace \"\\\\\",\"\\\\\" -replace '\"'^,'\\\"')) -Namespace root\Microsoft\Windows\Storage } | Format-Table DiskNumber,PartitionNumber"') do (
+for /f "eol=- skip=2 tokens=1,2" %%i in ('powershell Get-CimInstance MSFT_Volume -Namespace root\Microsoft\Windows\Storage -Filter """DriveLetter='%~1'""" -Property ObjectId ^^^| Get-CimAssociatedInstance -ResultClassName MSFT_Partition ^^^| Format-Table DiskNumber^,PartitionNumber') do (
 	set "%~2=%%~i"
 	set "%~3=%%~j"
 	set "%~4=Disk #%%~i, Partition #%%~j"
