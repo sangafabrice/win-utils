@@ -156,7 +156,7 @@ echo.
 exit /b 0
 
 :findDiskIndex <%1 = disk WQL filter> <%2 = disk partition 0-based index>
-for /f "tokens=1,2" %%i in ('wmic diskdrive where "%~1" get Index^,Partitions 2^> nul ^| findstr /rc:"[0-9]" ^| sort') do (
+for /f "eol=- tokens=1,2 skip=2" %%i in ('powershell -NoProfile Get-WmiObject Win32_DiskDrive -Filter """%~1""" -Property Index^,Partitions ^^^| Select-Object Index^,Partitions ^^^| Sort-Object ^^^| Format-Table') do (
 	rem The partition index cannot be greater or equal to the disk's partition count (Partitions),
 	if %%~j leq %~2 call :echoError 203 %~2 %%~i || exit /b -999
 	exit /b %%~i
@@ -189,12 +189,12 @@ exit /b -999
 
 :getDriveLetter <%1 = disk partition name> <%2 = [out] drive letter>
 set %~2=&
-for /f "tokens=2 delims==:" %%l in ('wmic partition where ^(DeviceID^="%~1"^) assoc:list /resultclass:Win32_LogicalDisk 2^> nul ^| findstr /b "Name="') do set "%~2=%%~l"& exit /b 0
+for /f "tokens=1 delims=:" %%l in ('powershell -NoProfile ^(Get-WmiObject -Query """Associators of {Win32_DiskPartition.DeviceID='%~1'} Where ResultClass=Win32_LogicalDisk"""^).Name 2^> nul') do set "%~2=%%~l"& exit /b 0
 exit /b -999
 
 :getPartitionName <%1 = drive letter> <%2 = [out] disk 0-based index> <%3 = [out] disk partition 0-based index> <%4 = [out] disk partition name>
 set %~2=& set %~3=& set %~4=&
-for /f "tokens=2,4 delims=#," %%i in ('wmic logicaldisk where "DeviceID='%~1:'" assoc:list /resultclass:Win32_DiskPartition 2^> nul ^| findstr /b "Name="') do (
+for /f "tokens=2,4 delims=#," %%i in ('powershell -NoProfile ^(Get-WmiObject -Query """Associators of {Win32_LogicalDisk.DeviceID='%~1:'} Where ResultClass=Win32_DiskPartition"""^).Name 2^> nul') do (
 	set "%~2=%%~i"
 	set "%~3=%%~j"
 	set "%~4=Disk #%%~i, Partition #%%~j"
@@ -204,11 +204,16 @@ exit /b 999
 
 :getProcessId
 :: Get the process id of the script runner for logging purposes
-for /f "tokens=1,2 skip=1" %%i in ('wmic process where "Name='cmd.exe' and CommandLine like '%%!guid!%%' and not CommandLine like '%%wmic process where%%'" get ProcessId^,ParentProcessId 2^> nul ^| findstr /xrvc:" *"') do call :log [PROCESS ID: %%~j] [PARENT PROCESS ID: %%~i]& exit /b %%~j
-exit /b 0
+setLocal
+set pid=0&
+set gps=Get-WmiObject Win32_Process -Filter """ProcessId=$PID""" -Property ProcessId^^,ParentProcessId&
+for /f "eol=- tokens=1,2 skip=2" %%i in ('powershell -NoProfile ^(%gps%^).ParentProcessId ^^^| ForEach-Object { ^(%gps:PID=_%^).ParentProcessId } ^^^| ForEach-Object { ^(%gps:PID=_%^) ^^^| Format-Table ParentProcessId^,ProcessId }') do call :log [PROCESS ID: %%~j] [PARENT PROCESS ID: %%~i]& set "pid=%%~j"
+call :return pid
+endlocal
+exit /b
 
 :getVolumeId <%1 = drive letter> <%2 = volume Id>
-for /f "skip=1" %%i in ('wmic volume where "DriveLetter='%~1:'" get DeviceID 2^> nul') do (
+for /f "eol=- tokens=1,2 skip=2" %%i in ('powershell -NoProfile Get-WmiObject Win32_Volume -Filter """DriveLetter='%~1:'""" -Property DeviceID ^^^| Format-Table DeviceID') do (
 	set "%~2=%%~i" & set "%~2=!%~2:\=\\!"
 	exit /b 0
 )
@@ -242,7 +247,7 @@ exit /b 999
 
 :isScriptRunnerProcessUnique <%1 = current process id>
 :: Reinforce that the script runners execute sequentially
-wmic process where "Name='cmd.exe' and CommandLine like '%%!guid!%%' and ProcessId<>%~1" get commandline 2> nul | find /c "%guid%" | find "0" > nul
+powershell -NoProfile (Get-WmiObject Win32_Process -Filter """Name='cmd.exe' and CommandLine like '%%!guid!%%' and ProcessId<>%~1""" -Property CommandLine).CommandLine | find /c "%guid%" | find "0" > nul
 exit /b
 
 :log <%* = log message>
@@ -250,7 +255,7 @@ exit /b
 exit /b %errorlevel%
 
 :removeVolumeDriveLetter <%1 = drive letter>
-wmic volume where "DriveLetter='%~1:'" set DriveLetter=NULL | find "update successful" > nul && exit /b 0
+powershell -NoProfile (Get-WmiObject Win32_Volume -Filter """DriveLetter='%~1:'""" ^| Set-WmiInstance -Arguments @{ DriveLetter=$NULL }).DriveLetter | findstr /ixl "%~1:" > nul || exit /b 0
 exit /b -999
 
 :resetErrorLevel
@@ -268,9 +273,9 @@ echo _%~1_%~2| findstr /ixrc:"_[A-Z]_[0-9][0-9]*" | findstr /ixvrc:"_[A-Z]_0[0-9
 exit /b 0
 
 :setVolumeDriveLetter <%1 = volume specifier> <%2 = new drive letter>
-wmic volume where "%~1" set DriveLetter="%~2:" | find "update successful" > nul && exit /b 0
+powershell -NoProfile (Get-WmiObject Win32_Volume -Filter """%~1""" ^| Set-WmiInstance -Arguments @{ DriveLetter="""%~2:""" }).DriveLetter | findstr /ixl "%~2:" > nul && exit /b 0
 exit /b -999
 
 :toUpperDriveLetter <%1 = char argument>
-powershell '%~1'.ToUpper() | findstr /xrc:"[A-Z]"
+powershell -NoProfile '%~1'.ToUpper() | findstr /xrc:"[A-Z]"
 exit /b
