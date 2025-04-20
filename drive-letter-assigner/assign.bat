@@ -31,9 +31,8 @@ call :getDriveLetter %assigneeDiskIndex% %assigneePartitionIndex% assigneeCurren
 call :isPartitionNot_C_Drive %assigneeCurrentLetter% || goto :farEnd
 if "%driveLetter%"=="%assigneeCurrentLetter%" goto :end
 :stepNext
-:: The rollback reassignment is the diskpart-assign command arguments (letter=L) where L (assignorNextLetter)
-:: is the letter assigned to the Assignor disk partition after it releases the drive letter 
-set assigneePartitionName=Disk #%assigneeDiskIndex%, Partition #%assigneePartitionIndex%& set rollbackReassignment=& set assignorNextLetter=%assigneeCurrentLetter%& set dpScript=%temp%\dp-bat&
+:: assignorNextLetter is the letter assigned to the Assignor disk partition after it releases the drive letter 
+set assigneePartitionName=Disk #%assigneeDiskIndex%, Partition #%assigneePartitionIndex%& set assignorNextLetter=%assigneeCurrentLetter%&
 call :echoTitle %driveLetter% "%assigneePartitionName%"
 if defined assigneeCurrentLetter call :echoNeutralWarning 106 "%assigneePartitionName%" %assigneeCurrentLetter%
 call :getPartitionName %driveLetter% assignorDiskIndex assignorPartitionIndex assignorPartitionName || goto :command
@@ -49,16 +48,15 @@ if errorlevel 1 set processId= [%errorlevel%]&
 call :isScriptRunnerProcessUnique %errorlevel% || goto :farEnd
 :assignletter
 call :resetErrorLevel
-if defined assignorPartitionName call :setDpPartitionDriveLetter %assignorDiskIndex% %assignorPartitionIndex% remove || call :echoError 205 %driveLetter% || goto :end
-call :setDpPartitionDriveLetter %assigneeDiskIndex% %assigneePartitionIndex% "assign letter=%driveLetter%" || (
+if defined assignorPartitionName call :freeDriveLetter %driveLetter% || call :echoError 205 %driveLetter% || goto :end
+( ( if defined assigneeCurrentLetter ( call :freeDriveLetter %assigneeCurrentLetter% ) else call :resetErrorLevel ) && call :addDriveLetter %assigneeDiskIndex% %assigneePartitionIndex% %driveLetter% ) || (
 	call :echoError 206 %driveLetter%
-	if defined assigneeCurrentLetter call :setDpPartitionDriveLetter %assigneeDiskIndex% %assigneePartitionIndex% "assign letter=%assigneeCurrentLetter%" || call :echoError 208 %assigneeCurrentLetter% "%assigneePartitionName%"
+	if defined assigneeCurrentLetter call :addDriveLetter %assigneeDiskIndex% %assigneePartitionIndex% %assigneeCurrentLetter% || call :echoError 208 %assigneeCurrentLetter% "%assigneePartitionName%"
 	call :forceErrorCode
 	set "assignorNextLetter=%driveLetter%"
 )
 if %errorlevel% equ 0 call :echoSuccess 001 %driveLetter%
-if defined assignorNextLetter set "rollbackReassignment= letter=%assignorNextLetter%"
-if defined assignorPartitionName call :setDpPartitionDriveLetter %assignorDiskIndex% %assignorPartitionIndex% "assign%rollbackReassignment%" || if "%assignorNextLetter%"=="%driveLetter%" ( call :echoWarning 102 %driveLetter% ) else call :echoWarning 103 "%assignorPartitionName%"
+if defined assignorPartitionName call :addDriveLetter %assignorDiskIndex% %assignorPartitionIndex% %assignorNextLetter% || if "%assignorNextLetter%"=="%driveLetter%" ( call :echoWarning 102 %driveLetter% ) else call :echoWarning 103 "%assignorPartitionName%"
 if defined assignorPartitionName if %errorlevel% equ 0 (
 	if not defined assignorNextLetter call :getDriveLetter %assignorDiskIndex% %assignorPartitionIndex% assignorNextLetter
 	if "%assignorNextLetter%" neq "%driveLetter%" call :echoNeutralWarning 104 "%assignorPartitionName%" !assignorNextLetter!
@@ -68,6 +66,14 @@ if %errorlevel% equ 0 if "%assignorNextLetter%" neq "%driveLetter%" call :echoSu
 :farEnd
 endlocal
 exit /b
+
+:addDriveLetter <%1 = disk number> <%2 = disk partition number> <%3 = drive letter>
+setlocal
+set addAccessPathParams="%~3:"&
+if "%~3"=="" set addAccessPathParams=""^^,TRUE&
+for /f "tokens=4 delims==; " %%i in ('wmic /namespace:\\root\Microsoft\Windows\Storage path MSFT_Partition where "DiskNumber=%~1 and PartitionNumber=%~2" call AddAccessPath %addAccessPathParams% ^| find "[out] uint32 ReturnValue"') do endlocal & if %%~i==42002 ( exit /b 0 ) else exit /b %%~i
+endlocal
+exit /b -999
 
 :dequoteArgument <%* = quoted argument>
 set returnedArg=_%*
@@ -153,6 +159,10 @@ exit /b
 :forceErrorCode
 exit /b -999
 
+:freeDriveLetter <%1 = drive letter>
+for /f "tokens=2 delims==;" %%i in ('wmic /namespace:\\root\Microsoft\Windows\Storage path MSFT_Partition where "DriveLetter='%~1'" call RemoveAccessPath "%~1:" ^| find "[out] uint32 ReturnValue"') do exit /b %%~i
+exit /b -999
+
 :getArgCount <%* = arguments>
 setlocal
 set count=0
@@ -227,14 +237,6 @@ exit /b 0
 
 :return <%1 = error code variable name>
 exit /b !%~1!
-
-:setDpPartitionDriveLetter <%1 = disk 0-based index> <%2 = diskpart disk partition 1-based index> <%3 = operation on the partition>
-(
-	echo select disk %~1
-	echo select partition %~2
-	echo %~3
-) > "%dpScript%" && diskpart /s "%dpScript%" > nul 2>&1
-exit /b
 
 :setNonPositionedArgs <%1 = argument1> <%2 = argument2> <%3 = [out] drive letter> <%4 = [out] disk partition 0-based index>
 call :_setNonPositionedArgs %* || call :_setNonPositionedArgs %2 %1 %3 %4 || exit /b -999
