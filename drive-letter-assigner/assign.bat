@@ -71,7 +71,7 @@ exit /b
 setlocal
 set addAccessPathParams=@{ AccessPath^^="""%~3:""" }&
 if "%~3"=="" set addAccessPathParams=@{ AssignDriveLetter^^=$TRUE }&
-for /f %%i in ('powershell ^(gcim MSFT_Partition -n root\Microsoft\Windows\Storage -f """DiskNumber=%~1 and PartitionNumber=%~2""" ^^^| icim -m AddAccessPath -a %addAccessPathParams%^).ReturnValue') do endlocal & if %%~i==42002 ( exit /b 0 ) else exit /b %%~i
+for /f %%i in ('powershell ^(Get-Partition -DiskNumber %~1 -PartitionNumber %~2 -ErrorAction SilentlyContinue ^^^| icim -m AddAccessPath -a %addAccessPathParams%^).ReturnValue') do endlocal & if %%~i==42002 ( exit /b 0 ) else exit /b %%~i
 endlocal
 exit /b -999
 
@@ -147,8 +147,8 @@ call :log "%~2" requests %~1
 echo.
 exit /b 0
 
-:findDiskIndex <%1 = disk WQL filter> <%2 = disk partition number>
-for /f "eol=- skip=2 tokens=1,2" %%i in ('powershell gcim MSFT_Disk -n root\Microsoft\Windows\Storage -f """%~1""" -p Number^,NumberOfPartitions ^^^| select Number^,NumberOfPartitions ^^^| sort ^^^| ft') do (
+:findDiskIndex <%1 = disk filter criteria> <%2 = disk partition number>
+for /f "eol=- skip=2 tokens=1,2" %%i in ('powershell Get-Disk %~1 -ErrorAction SilentlyContinue ^^^| select Number^,NumberOfPartitions ^^^| sort ^^^| ft') do (
 	rem The partition number cannot be greater than the number of partitions
 	if %%~j lss %~2 call :echoError 203 %~2 %%~i || exit /b -999
 	exit /b %%~i
@@ -160,7 +160,7 @@ exit /b
 exit /b -999
 
 :freeDriveLetter <%1 = drive letter>
-for /f %%i in ('powershell ^(gcim MSFT_Partition -n root\Microsoft\Windows\Storage -f """DriveLetter='%~1'""" ^^^| icim -m RemoveAccessPath -a @{ AccessPath^="""%~1:""" }^).ReturnValue') do exit /b %%~i
+for /f %%i in ('powershell ^(Get-Partition -DriveLetter %~1 -ErrorAction SilentlyContinue ^^^| icim -m RemoveAccessPath -a @{ AccessPath^="""%~1:""" }^).ReturnValue') do exit /b %%~i
 exit /b -999
 
 :getArgCount <%* = arguments>
@@ -174,18 +174,18 @@ call :return count
 endlocal
 exit /b
 
-:getDiskFilterClause <%1 = unquoted disk filter argument varialbe name> <%2 = [out] disk WQL filter>
+:getDiskFilterClause <%1 = unquoted disk filter argument varialbe name> <%2 = [out] disk filter criteria>
 :: the disk number (i) argument is converted to: Index=i
 :: the disk model substring (s) argument is converted to: FriendlyName like %s%
 :: the disk serial number (sn) argument is converted to: SerialNumber='sn'
-echo !%~1!| findstr /ixrc:"/i:[0-9][0-9]*" | findstr /ixrvc:"/i:0[0-9][0-9]*" > nul && set %~2=!%~1:/i:=Number=!&& exit /b 0
-echo !%~1!| findstr /ibrc:"/m:" > nul && set %~2=!%~1:/m:=FriendlyName like '%%%%!%%%%'&& exit /b 0
-echo !%~1!| findstr /ibrc:"/s:" > nul && set %~2=!%~1:/s:=SerialNumber='!'&& exit /b 0
+echo !%~1!| findstr /ixrc:"/i:[0-9][0-9]*" | findstr /ixrvc:"/i:0[0-9][0-9]*" > nul && set %~2=!%~1:/i:=-Number !&& exit /b 0
+echo !%~1!| findstr /ibrc:"/m:" > nul && set %~2=!%~1:/m:=-FriendlyName '*!*'&& exit /b 0
+echo !%~1!| findstr /ibrc:"/s:" > nul && set %~2=!%~1:/s:=-SerialNumber '!'&& exit /b 0
 exit /b -999
 
 :getDriveLetter <%1 = disk number> <%2 = disk partition number> <%3 = [out] drive letter>
 set %~3=&
-for /f "eol=- skip=2 tokens=1,2" %%k in ('powershell gcim MSFT_Partition -n root\Microsoft\Windows\Storage -f """DiskNumber=%~1 and PartitionNumber=%~2""" -p PartitionNumber^,DriveLetter ^^^| ft PartitionNumber^,DriveLetter') do (
+for /f "eol=- skip=2 tokens=1,2" %%k in ('powershell Get-Partition -DiskNumber %~1 -PartitionNumber %~2 -ErrorAction SilentlyContinue ^^^| ft PartitionNumber^,DriveLetter') do (
 	if "%%~l"=="" exit /b 999
 	set "%~3=%%~l"& exit /b 0
 )
@@ -194,7 +194,7 @@ exit /b -999
 
 :getPartitionName <%1 = drive letter> <%2 = [out] disk number> <%3 = [out] disk partition number> <%4 = [out] disk partition name>
 set %~2=& set %~3=& set %~4=&
-for /f "eol=- skip=2 tokens=1,2" %%i in ('powershell gcim MSFT_Partition -n root\Microsoft\Windows\Storage -f """DriveLetter='%~1'""" -p DiskNumber^,PartitionNumber ^^^| ft DiskNumber^,PartitionNumber') do (
+for /f "eol=- skip=2 tokens=1,2" %%i in ('powershell Get-Partition -DriveLetter %~1 -ErrorAction SilentlyContinue ^^^| ft DiskNumber^,PartitionNumber') do (
 	set "%~2=%%~i"
 	set "%~3=%%~j"
 	set "%~4=Disk #%%~i, Partition #%%~j"
