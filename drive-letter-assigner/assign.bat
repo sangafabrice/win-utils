@@ -69,10 +69,11 @@ exit /b
 
 :addDriveLetter <%1 = disk number> <%2 = disk partition number> <%3 = drive letter>
 setlocal
-set addAccessPathParams=@{ AccessPath^^="""%~3:""" }&
-if "%~3"=="" set addAccessPathParams=@{ AssignDriveLetter^^=$TRUE }&
-for /f %%i in ('powershell ^(Get-Partition -DiskNumber %~1 -PartitionNumber %~2 -ErrorAction SilentlyContinue ^^^| icim -m AddAccessPath -a %addAccessPathParams%^).ReturnValue') do endlocal & if %%~i==42002 ( exit /b 0 ) else exit /b %%~i
+set addAccessPathParams=-AccessPath %~3:&
+if "%~3"=="" set addAccessPathParams=-AssignDriveLetter&
+powershell Get-Partition -DiskNumber %~1 -PartitionNumber %~2 ^| Add-PartitionAccessPath %addAccessPathParams% > nul 2>&1
 endlocal
+powershell (Get-Partition -DiskNumber %~1 -PartitionNumber %~2 -ErrorAction SilentlyContinue).DriveLetter | findstr /xrc:"[A-Z]" > nul && exit /b 0
 exit /b -999
 
 :dequoteArgument <%* = quoted argument>
@@ -148,9 +149,8 @@ echo.
 exit /b 0
 
 :findDiskIndex <%1 = disk filter criteria> <%2 = disk partition number>
-for /f "eol=- skip=2 tokens=1,2" %%i in ('powershell Get-Disk %~1 -ErrorAction SilentlyContinue ^^^| select Number^,NumberOfPartitions ^^^| sort ^^^| ft') do (
-	rem The partition number cannot be greater than the number of partitions
-	if %%~j lss %~2 call :echoError 203 %~2 %%~i || exit /b -999
+for /f %%i in ('powershell ^(Get-Disk %~1^).Number ^^^| sort 2^> nul') do (
+	powershell Get-Partition -DiskNumber %%~i -PartitionNumber %~2 > nul 2>&1 || call :echoError 203 %~2 %%~i || exit /b -999
 	exit /b %%~i
 )
 call :echoError 204
@@ -160,7 +160,8 @@ exit /b
 exit /b -999
 
 :freeDriveLetter <%1 = drive letter>
-for /f %%i in ('powershell ^(Get-Partition -DriveLetter %~1 -ErrorAction SilentlyContinue ^^^| icim -m RemoveAccessPath -a @{ AccessPath^="""%~1:""" }^).ReturnValue') do exit /b %%~i
+powershell Get-Partition -DriveLetter %~1 ^| Remove-PartitionAccessPath -AccessPath %~1: > nul 2>&1
+powershell (Get-Partition -DriveLetter %~1 2>&1).Exception.Message | findstr /il "No MSFT_Partition objects found with property 'DriveLetter' equal to '%~1'." > nul && exit /b 0
 exit /b -999
 
 :getArgCount <%* = arguments>
