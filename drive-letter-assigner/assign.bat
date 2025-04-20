@@ -69,9 +69,9 @@ exit /b
 
 :addDriveLetter <%1 = disk number> <%2 = disk partition number> <%3 = drive letter>
 setlocal
-set addAccessPathParams="%~3:"&
-if "%~3"=="" set addAccessPathParams=""^^,TRUE&
-for /f "tokens=4 delims==; " %%i in ('wmic /namespace:\\root\Microsoft\Windows\Storage path MSFT_Partition where "DiskNumber=%~1 and PartitionNumber=%~2" call AddAccessPath %addAccessPathParams% ^| find "[out] uint32 ReturnValue"') do endlocal & if %%~i==42002 ( exit /b 0 ) else exit /b %%~i
+set addAccessPathParams="""%~3:"""&
+if "%~3"=="" set addAccessPathParams=$NULL^^,$TRUE&
+for /f %%i in ('powershell ^(Get-WmiObject MSFT_Partition -Namespace root\Microsoft\Windows\Storage -Filter """DiskNumber=%~1 and PartitionNumber=%~2""" ^^^| Invoke-WmiMethod -Name AddAccessPath -ArgumentList %addAccessPathParams%^).ReturnValue') do endlocal & if %%~i==42002 ( exit /b 0 ) else exit /b %%~i
 endlocal
 exit /b -999
 
@@ -148,7 +148,7 @@ echo.
 exit /b 0
 
 :findDiskIndex <%1 = disk WQL filter> <%2 = disk partition number>
-for /f "tokens=1,2" %%i in ('wmic /namespace:\\root\Microsoft\Windows\Storage path MSFT_Disk where "%~1" get Number^,NumberOfPartitions 2^> nul ^| findstr /rc:"[0-9]" ^| sort') do (
+for /f "eol=- skip=2 tokens=1,2" %%i in ('powershell Get-WmiObject MSFT_Disk -Namespace root\Microsoft\Windows\Storage -Filter """%~1""" -Property Number^,NumberOfPartitions ^^^| Select-Object Number^,NumberOfPartitions ^^^| Sort-Object ^^^| Format-Table') do (
 	rem The partition number cannot be greater than the number of partitions
 	if %%~j lss %~2 call :echoError 203 %~2 %%~i || exit /b -999
 	exit /b %%~i
@@ -160,7 +160,7 @@ exit /b
 exit /b -999
 
 :freeDriveLetter <%1 = drive letter>
-for /f "tokens=2 delims==;" %%i in ('wmic /namespace:\\root\Microsoft\Windows\Storage path MSFT_Partition where "DriveLetter='%~1'" call RemoveAccessPath "%~1:" ^| find "[out] uint32 ReturnValue"') do exit /b %%~i
+for /f %%i in ('powershell ^(Get-WmiObject MSFT_Partition -Namespace root\Microsoft\Windows\Storage -Filter """DriveLetter='%~1'""" ^^^| Invoke-WmiMethod -Name RemoveAccessPath -ArgumentList """%~1:"""^).ReturnValue') do exit /b %%~i
 exit /b -999
 
 :getArgCount <%* = arguments>
@@ -185,8 +185,8 @@ exit /b -999
 
 :getDriveLetter <%1 = disk number> <%2 = disk partition number> <%3 = [out] drive letter>
 set %~3=&
-for /f "skip=1" %%l in ('wmic /namespace:\\root\Microsoft\Windows\Storage path MSFT_Partition where "DiskNumber=%~1 and PartitionNumber=%~2" get DriveLetter 2^> nul ^| findstr /ir "[A-Z]"') do (
-	if "%%~l"=="\x0000" exit /b 999
+for /f "eol=- skip=2 tokens=1,2" %%k in ('powershell Get-WmiObject MSFT_Partition -Namespace root\Microsoft\Windows\Storage -Filter """DiskNumber=%~1 and PartitionNumber=%~2""" -Property PartitionNumber^,DriveLetter ^^^| Format-Table PartitionNumber^,DriveLetter') do (
+	if "%%~l"=="" exit /b 999
 	set "%~3=%%~l"& exit /b 0
 )
 call :echoError 203 %~2 %~1
@@ -194,17 +194,23 @@ exit /b -999
 
 :getPartitionName <%1 = drive letter> <%2 = [out] disk number> <%3 = [out] disk partition number> <%4 = [out] disk partition name>
 set %~2=& set %~3=& set %~4=&
-for /f "tokens=1,2 delims==" %%i in ('wmic /namespace:\\root\Microsoft\Windows\Storage path MSFT_Volume where "DriveLetter='%~1'" assoc:list /resultclass:MSFT_Partition 2^> nul ^| findstr /b "DiskNumber= PartitionNumber="') do (
-	if "%%~i"=="DiskNumber" set "%~2=%%~j"
-	if "%%~i"=="PartitionNumber" set "%~3=%%~j"
+for /f "eol=- skip=2 tokens=1,2" %%i in ('powershell Get-WmiObject MSFT_Volume -Namespace root\Microsoft\Windows\Storage -Filter """DriveLetter='%~1'""" -Property __PATH ^^^| ForEach-Object { Get-WmiObject -Query """Associators of {$($_.__PATH)} Where ResultClass=MSFT_Partition""" -Namespace root\Microsoft\Windows\Storage } ^^^| Format-Table DiskNumber^,PartitionNumber') do (
+	set "%~2=%%~i"
+	set "%~3=%%~j"
+	set "%~4=Disk #%%~i, Partition #%%~j"
+	exit /b 0
 )
-if defined %~2 if defined %~3 set "%~4=Disk #!%~2!, Partition #!%~3!"& exit /b 0
 exit /b 999
 
 :getProcessId
 :: Get the process id of the script runner for logging purposes
-for /f "tokens=1,2 skip=1" %%i in ('wmic process where "Name='cmd.exe' and CommandLine like '%%!guid!%%' and not CommandLine like '%%wmic process where%%'" get ProcessId^,ParentProcessId 2^> nul ^| findstr /xrvc:" *"') do call :log [PROCESS ID: %%~j] [PARENT PROCESS ID: %%~i]& exit /b %%~j
-exit /b 0
+setLocal
+set pid=0&
+set gps=Get-WmiObject Win32_Process -Filter """ProcessId=$PID""" -Property ProcessId^^,ParentProcessId&
+for /f "eol=- skip=2 tokens=1,2" %%i in ('powershell ^(%gps%^).ParentProcessId ^^^| ForEach-Object { ^(%gps:PID=_%^).ParentProcessId } ^^^| ForEach-Object { ^(%gps:PID=_%^) ^^^| Format-Table ParentProcessId^,ProcessId }') do call :log [PROCESS ID: %%~j] [PARENT PROCESS ID: %%~i]& set "pid=%%~j"
+call :return pid
+endlocal
+exit /b
 
 :help
 call :log ABORT: The task stopped.
@@ -225,7 +231,7 @@ exit /b
 
 :isScriptRunnerProcessUnique <%1 = current process id>
 :: Reinforce that the script runners execute sequentially
-wmic process where "Name='cmd.exe' and CommandLine like '%%!guid!%%' and ProcessId<>%~1" get commandline 2> nul | find /c "%guid%" | find "0" > nul || call :echoWarning 101
+powershell (Get-WmiObject Win32_Process -Filter """Name='cmd.exe' and CommandLine like '%%!guid!%%' and ProcessId<>%~1""" -Property CommandLine).CommandLine | find /c "%guid%" | find "0" > nul || call :echoWarning 101
 exit /b
 
 :log <%* = log message>
