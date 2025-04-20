@@ -194,7 +194,7 @@ exit /b -999
 
 :getPartitionName <%1 = drive letter> <%2 = [out] disk number> <%3 = [out] disk partition number> <%4 = [out] disk partition name>
 set %~2=& set %~3=& set %~4=&
-for /f "eol=- skip=2 tokens=1,2" %%i in ('powershell gcim MSFT_Volume -n root\Microsoft\Windows\Storage -f """DriveLetter='%~1'""" -p ObjectId ^^^| gcai -result MSFT_Partition ^^^| ft DiskNumber^,PartitionNumber') do (
+for /f "eol=- skip=2 tokens=1,2" %%i in ('powershell gcim MSFT_Partition -n root\Microsoft\Windows\Storage -f """DriveLetter='%~1'""" -p DiskNumber^,PartitionNumber ^^^| ft DiskNumber^,PartitionNumber') do (
 	set "%~2=%%~i"
 	set "%~3=%%~j"
 	set "%~4=Disk #%%~i, Partition #%%~j"
