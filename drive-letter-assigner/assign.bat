@@ -71,7 +71,7 @@ exit /b
 setlocal
 set addAccessPathParams=-AccessPath %~3:&
 if "%~3"=="" set addAccessPathParams=-AssignDriveLetter&
-powershell Get-Partition -DiskNumber %~1 -PartitionNumber %~2 ^| Add-PartitionAccessPath %addAccessPathParams% > nul 2>&1
+powershell Add-PartitionAccessPath -DiskNumber %~1 -PartitionNumber %~2 %addAccessPathParams% > nul 2>&1
 endlocal
 powershell (Get-Partition -DiskNumber %~1 -PartitionNumber %~2 -ErrorAction SilentlyContinue).DriveLetter | findstr /xrc:"[A-Z]" > nul && exit /b 0
 exit /b -999
@@ -160,7 +160,7 @@ exit /b
 exit /b -999
 
 :freeDriveLetter <%1 = drive letter>
-powershell Get-Partition -DriveLetter %~1 ^| Remove-PartitionAccessPath -AccessPath %~1: > nul 2>&1
+powershell Remove-PartitionAccessPath -DriveLetter %~1 -AccessPath %~1: > nul 2>&1
 powershell (Get-Partition -DriveLetter %~1 2>&1).Exception.Message | findstr /il "No MSFT_Partition objects found with property 'DriveLetter' equal to '%~1'." > nul && exit /b 0
 exit /b -999
 
