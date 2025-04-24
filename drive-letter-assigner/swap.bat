@@ -17,7 +17,7 @@ if "%returnedArg%" equ "%guid%" goto :afterCommand
 call :getArgCount %* & set argCount=!errorlevel!&
 if errorlevel 4 call :help || goto :farEnd
 if not errorlevel 2 call :help || goto :farEnd
-call :dequoteArgument %~2 & set driverLetterArg=!returnedArg!& set assigneeDiskIndex=& set assignorVolumeIndex=&
+call :dequoteArgument %~2 & set driverLetterArg=!returnedArg!& set assigneeDiskIndex=& set assignorVolumeId=&
 call :dequoteArgument %~1
 call :isPartitionSpecifierLetter "%returnedArg%" || if not errorlevel 0 ( for /f "tokens=2 delims=:" %%l in ("%returnedArg%") do call :echoError 201 %%~l || goto :farEnd ) else goto :partitionParsing
 if "%argCount%"=="3" call :echoError 201 %~3 || goto :farEnd
@@ -50,7 +50,7 @@ call :echoNeutralWarning 106 "%assigneePartitionName%" %assigneeCurrentLetter%
 set "assignorNextLetter=%assigneeCurrentLetter%"
 call :getPartitionName %driveLetter% assignorDiskIndex assignorPartitionIndex assignorPartitionName || goto :command
 call :echoNeutralWarning 105 "%assignorPartitionName%" %driveLetter%
-call :getVolumeIndex %driveLetter% & if errorlevel 0 set assignorVolumeIndex=!errorlevel!&
+call :getVolumeId %driveLetter% assignorVolumeId
 :command
 echo %driveLetter%:_%assigneeCurrentLetter%:| find /i "%~d0" > nul && copy "%commandPath%" "%temp%" /y > nul 2>&1 && cd /d "%temp%" 2> nul && set "commandPath=%temp%\%~nx0"
 :: Restart the runner process with the guid argument
@@ -62,15 +62,13 @@ if errorlevel 1 set processId= [%errorlevel%]&
 call :isScriptRunnerProcessUnique %errorlevel% || call :echoWarning 101 || goto :farEnd
 :assignletter
 call :resetErrorLevel
-if defined assignorPartitionName call :setVolumeDriveLetter %driveLetter% remove || call :echoError 205 %driveLetter% || goto :end
-call :setVolumeDriveLetter %assigneeCurrentLetter% "assign letter=%driveLetter%" || (
+if defined assignorPartitionName call :removeVolumeDriveLetter %driveLetter% || call :echoError 205 %driveLetter% || goto :end
+call :setVolumeDriveLetter "DriveLetter='%assigneeCurrentLetter%:'" %driveLetter% || (
 	call :echoError 206 %driveLetter%
-	call :setVolumeDriveLetter %assigneeDiskIndex% %assigneeDpPartitionIndex% "assign letter=%assigneeCurrentLetter%" || call :echoError 208 %assigneeCurrentLetter% "%assigneePartitionName%"
-	call :forceErrorCode
 	set "assignorNextLetter=%driveLetter%"
 )
 if %errorlevel% equ 0 call :echoSuccess 001 %driveLetter%
-if defined assignorPartitionName call :setVolumeDriveLetter %assignorVolumeIndex% "assign letter=%assignorNextLetter%" || if "%assignorNextLetter%"=="%driveLetter%" ( call :echoWarning 102 %driveLetter% ) else call :echoWarning 103 "%assignorPartitionName%"
+if defined assignorPartitionName call :setVolumeDriveLetter "DeviceID='%assignorVolumeId%'" %assignorNextLetter% || if "%assignorNextLetter%"=="%driveLetter%" ( call :echoWarning 102 %driveLetter% ) else call :echoWarning 103 "%assignorPartitionName%"
 if defined assignorPartitionName if %errorlevel% equ 0 (
 	if not defined assignorNextLetter call :getDriveLetter "%assignorPartitionName%" assignorNextLetter
 	if "%assignorNextLetter%" neq "%driveLetter%" call :echoNeutralWarning 104 "%assignorPartitionName%" !assignorNextLetter!
@@ -209,15 +207,11 @@ exit /b 999
 for /f "tokens=1,2 skip=1" %%i in ('wmic process where "Name='cmd.exe' and CommandLine like '%%!guid!%%' and not CommandLine like '%%wmic process where%%'" get ProcessId^,ParentProcessId 2^> nul ^| findstr /xrvc:" *"') do call :log [PROCESS ID: %%~j] [PARENT PROCESS ID: %%~i]& exit /b %%~j
 exit /b 0
 
-:getVolumeIndex <%1 = drive letter>
-setlocal
-set dpOutput=%temp%\dp-out& 
-(
-	echo select volume=%~1
-	echo list volume
-) > "%dpScript%" && diskpart /s "%dpScript%" > "%dpOutput%" 2>&1
-for /f "tokens=3" %%i in ('type "%dpOutput%" ^| findstr "*"') do endlocal & exit /b %%~i
-endlocal
+:getVolumeId <%1 = drive letter> <%2 = volume Id>
+for /f "skip=1" %%i in ('wmic volume where "DriveLetter='%~1:'" get DeviceID 2^> nul') do (
+	set "%~2=%%~i" & set "%~2=!%~2:\=\\!"
+	exit /b 0
+)
 exit /b -999
 
 :help
@@ -255,6 +249,10 @@ exit /b
 (echo [%date:~4% %time:~0,-3%]%processId% %*>> "%temp%\dp-assign-drive-letter.log") > nul
 exit /b %errorlevel%
 
+:removeVolumeDriveLetter <%1 = drive letter>
+wmic volume where "DriveLetter='%~1:'" set DriveLetter=NULL | find "update successful" > nul && exit /b 0
+exit /b -999
+
 :resetErrorLevel
 exit /b 0
 
@@ -269,12 +267,9 @@ echo _%~1_%~2| findstr /ixrc:"_[A-Z]_[0-9][0-9]*" | findstr /ixvrc:"_[A-Z]_0[0-9
 ( if "%~4" neq "" set "%~4=%~2" ) & for /f %%L in ('"%commandPath%" call :toUpperDriveLetter %~1') do set %~3=%%~L
 exit /b 0
 
-:setVolumeDriveLetter <%1 = volume specifier> <%2 = operation on the volume>
-(
-	echo select volume=%~1
-	echo %~2
-) > "%dpScript%" && diskpart /s "%dpScript%" > nul 2>&1
-exit /b
+:setVolumeDriveLetter <%1 = volume specifier> <%2 = new drive letter>
+wmic volume where "%~1" set DriveLetter="%~2:" | find "update successful" > nul && exit /b 0
+exit /b -999
 
 :toUpperDriveLetter <%1 = char argument>
 powershell '%~1'.ToUpper() | findstr /xrc:"[A-Z]"
