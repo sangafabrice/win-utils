@@ -35,8 +35,6 @@ if "%driveLetter%"=="%assigneeCurrentLetter%" goto :end
 set assigneePartitionName=Disk #%assigneeDiskIndex%, Partition #%assigneePartitionIndex%& set assignorNextLetter=%assigneeCurrentLetter%&
 call :echoTitle %driveLetter% "%assigneePartitionName%"
 if defined assigneeCurrentLetter call :echoNeutralWarning 106 "%assigneePartitionName%" %assigneeCurrentLetter%
-call :getPartitionName %driveLetter% assignorDiskIndex assignorPartitionIndex assignorPartitionName || goto :command
-call :echoNeutralWarning 105 "%assignorPartitionName%" %driveLetter%
 :command
 echo %driveLetter%:_%assigneeCurrentLetter%:| find /i "%~d0" > nul && copy "%commandPath%" "%temp%" /y > nul 2>&1 && cd /d "%temp%" 2> nul && set "commandPath=%temp%\%~nx0"
 :: Restart the runner process with the guid argument
@@ -45,24 +43,20 @@ goto :farEnd
 :afterCommand
 call :getProcessId
 if errorlevel 1 set processId= [%errorlevel%]&
-call :isScriptRunnerProcessUnique %errorlevel% || goto :farEnd
+call :isScriptRunnerProcessUnique %errorlevel% || call :echoWarning 101 || goto :farEnd
+set runSecondTime=&
 :assignletter
-call :resetErrorLevel
-if defined assignorPartitionName call :freeDriveLetter %driveLetter% || call :echoError 205 %driveLetter% || goto :end
-( ( if defined assigneeCurrentLetter ( call :freeDriveLetter %assigneeCurrentLetter% ) else call :resetErrorLevel ) && call :addDriveLetter %assigneeDiskIndex% %assigneePartitionIndex% %driveLetter% ) || (
-	call :echoError 206 %driveLetter%
-	if defined assigneeCurrentLetter call :addDriveLetter %assigneeDiskIndex% %assigneePartitionIndex% %assigneeCurrentLetter% || call :echoError 208 %assigneeCurrentLetter% "%assigneePartitionName%"
-	call :forceErrorCode
-	set "assignorNextLetter=%driveLetter%"
-)
-if %errorlevel% equ 0 call :echoSuccess 001 %driveLetter%
-if defined assignorPartitionName call :addDriveLetter %assignorDiskIndex% %assignorPartitionIndex% %assignorNextLetter% || if "%assignorNextLetter%"=="%driveLetter%" ( call :echoWarning 102 %driveLetter% ) else call :echoWarning 103 "%assignorPartitionName%"
-if defined assignorPartitionName if %errorlevel% equ 0 (
-	if not defined assignorNextLetter call :getDriveLetter %assignorDiskIndex% %assignorPartitionIndex% assignorNextLetter
-	if "%assignorNextLetter%" neq "%driveLetter%" call :echoNeutralWarning 104 "%assignorPartitionName%" !assignorNextLetter!
-)
+call :changeDriveLetter %assigneeDiskIndex% %assigneePartitionIndex% %driveLetter% && call :echoSuccess 001 %driveLetter% && if defined runSecondTime ( goto :rollbackAssignment ) else goto :end
+if defined runSecondTime ( call :echoError 206 %driveLetter% || set "assignorNextLetter=%driveLetter%" && goto :rollbackAssignment ) else set runSecondTime=true
+call :getPartitionName %driveLetter% assignorDiskIndex assignorPartitionIndex assignorPartitionName && call :echoNeutralWarning 105 "!assignorPartitionName!" %driveLetter%
+call :freeDriveLetter %driveLetter% || call :echoError 205 %driveLetter% || goto :farEnd
+goto :assignletter
+:rollbackAssignment
+if not defined assignorPartitionName goto :end
+call :addDriveLetter %assignorDiskIndex% %assignorPartitionIndex% %assignorNextLetter% || ( if "%assignorNextLetter%"=="%driveLetter%" ( call :echoWarning 102 %driveLetter% ) else call :echoWarning 103 "%assignorPartitionName%" ) || goto :farEnd
+call :getDriveLetter %assignorDiskIndex% %assignorPartitionIndex% assignorNextLetter && if "%assignorNextLetter%" neq "%driveLetter%" ( call :echoNeutralWarning 104 "%assignorPartitionName%" !assignorNextLetter! ) else call :forceErrorCode
 :end
-if %errorlevel% equ 0 if "%assignorNextLetter%" neq "%driveLetter%" call :echoSuccess 002
+if %errorlevel% equ 0 call :echoSuccess 002
 :farEnd
 endlocal
 exit /b
@@ -75,6 +69,10 @@ powershell Add-PartitionAccessPath -DiskNumber %~1 -PartitionNumber %~2 %addAcce
 endlocal
 powershell (Get-Partition -DiskNumber %~1 -PartitionNumber %~2 -ErrorAction SilentlyContinue).DriveLetter | findstr /xrc:"[A-Z]" > nul && exit /b 0
 exit /b -999
+
+:changeDriveLetter <%1 = disk number> <%2 = disk partition number> <%3 = drive letter>
+powershell Set-Partition -DiskNumber %~1 -PartitionNumber %~2 -NewDriveLetter %~3 2> nul
+exit /b
 
 :dequoteArgument <%* = quoted argument>
 set returnedArg=_%*
@@ -232,15 +230,12 @@ exit /b
 
 :isScriptRunnerProcessUnique <%1 = current process id>
 :: Reinforce that the script runners execute sequentially
-powershell (gcim Win32_Process -f """Name='cmd.exe' and CommandLine like '%%!guid!%%' and ProcessId<>%~1""" -p CommandLine).CommandLine | find /c "%guid%" | find "0" > nul || call :echoWarning 101
+powershell (gcim Win32_Process -f """Name='cmd.exe' and CommandLine like '%%!guid!%%' and ProcessId<>%~1""" -p CommandLine).CommandLine | find /c "%guid%" | find "0" > nul
 exit /b
 
 :log <%* = log message>
 (echo [%date:~4% %time:~0,-3%]%processId% %*>> "%temp%\dp-assign-drive-letter.log") > nul
 exit /b %errorlevel%
-
-:resetErrorLevel
-exit /b 0
 
 :return <%1 = error code variable name>
 exit /b !%~1!
