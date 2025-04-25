@@ -65,13 +65,13 @@ exit /b
 setlocal
 set addAccessPathParams=-AccessPath %~3:&
 if "%~3"=="" set addAccessPathParams=-AssignDriveLetter&
-powershell Add-PartitionAccessPath -DiskNumber %~1 -PartitionNumber %~2 %addAccessPathParams% > nul 2>&1
+powershell -NoProfile Add-PartitionAccessPath -DiskNumber %~1 -Number %~2 %addAccessPathParams% > nul 2>&1
 endlocal
-powershell (Get-Partition -DiskNumber %~1 -PartitionNumber %~2 -ErrorAction SilentlyContinue).DriveLetter | findstr /xrc:"[A-Z]" > nul && exit /b 0
+powershell -NoProfile (Get-Partition -DiskNumber %~1 -Number %~2 -ea SilentlyContinue).DriveLetter | findstr /xrc:"[A-Z]" > nul && exit /b 0
 exit /b -999
 
 :changeDriveLetter <%1 = disk number> <%2 = disk partition number> <%3 = drive letter>
-powershell Set-Partition -DiskNumber %~1 -PartitionNumber %~2 -NewDriveLetter %~3 2> nul
+powershell -NoProfile Set-Partition -DiskNumber %~1 -Number %~2 -NewDriveLetter %~3 2> nul
 exit /b
 
 :dequoteArgument <%* = quoted argument>
@@ -147,8 +147,8 @@ echo.
 exit /b 0
 
 :findDiskIndex <%1 = disk filter criteria> <%2 = disk partition number>
-for /f %%i in ('powershell ^(Get-Disk %~1^).Number ^^^| sort 2^> nul') do (
-	powershell Get-Partition -DiskNumber %%~i -PartitionNumber %~2 > nul 2>&1 || call :echoError 203 %~2 %%~i || exit /b -999
+for /f %%i in ('powershell -NoProfile ^(Get-Disk %~1^).Number ^^^| sort 2^> nul') do (
+	powershell -NoProfile Get-Partition -DiskNumber %%~i -Number %~2 > nul 2>&1 || call :echoError 203 %~2 %%~i || exit /b -999
 	exit /b %%~i
 )
 call :echoError 204
@@ -158,8 +158,8 @@ exit /b
 exit /b -999
 
 :freeDriveLetter <%1 = drive letter>
-powershell Remove-PartitionAccessPath -DriveLetter %~1 -AccessPath %~1: > nul 2>&1
-powershell (Get-Partition -DriveLetter %~1 2>&1).Exception.Message | findstr /il "No MSFT_Partition objects found with property 'DriveLetter' equal to '%~1'." > nul && exit /b 0
+powershell -NoProfile Remove-PartitionAccessPath -DriveLetter %~1 -AccessPath %~1: > nul 2>&1
+powershell -NoProfile (Get-Partition -DriveLetter %~1 2>&1).Exception.Message | findstr /il "No MSFT_Partition objects found with property 'DriveLetter' equal to '%~1'." > nul && exit /b 0
 exit /b -999
 
 :getArgCount <%* = arguments>
@@ -184,7 +184,7 @@ exit /b -999
 
 :getDriveLetter <%1 = disk number> <%2 = disk partition number> <%3 = [out] drive letter>
 set %~3=&
-for /f "eol=- skip=2 tokens=1,2" %%k in ('powershell Get-Partition -DiskNumber %~1 -PartitionNumber %~2 -ErrorAction SilentlyContinue ^^^| ft PartitionNumber^,DriveLetter') do (
+for /f "eol=- skip=2 tokens=1,2" %%k in ('powershell -NoProfile Get-Partition -DiskNumber %~1 -Number %~2 -ea SilentlyContinue ^^^| ft PartitionNumber^,DriveLetter') do (
 	if "%%~l"=="" exit /b 999
 	set "%~3=%%~l"& exit /b 0
 )
@@ -193,7 +193,7 @@ exit /b -999
 
 :getPartitionName <%1 = drive letter> <%2 = [out] disk number> <%3 = [out] disk partition number> <%4 = [out] disk partition name>
 set %~2=& set %~3=& set %~4=&
-for /f "eol=- skip=2 tokens=1,2" %%i in ('powershell Get-Partition -DriveLetter %~1 -ErrorAction SilentlyContinue ^^^| ft DiskNumber^,PartitionNumber') do (
+for /f "eol=- skip=2 tokens=1,2" %%i in ('powershell -NoProfile Get-Partition -DriveLetter %~1 -ea SilentlyContinue ^^^| ft DiskNumber^,PartitionNumber') do (
 	set "%~2=%%~i"
 	set "%~3=%%~j"
 	set "%~4=Disk #%%~i, Partition #%%~j"
@@ -206,7 +206,7 @@ exit /b 999
 setLocal
 set pid=0&
 set gps=gcim Win32_Process -f """ProcessId=$PID""" -p ProcessId^^,ParentProcessId&
-for /f "eol=- skip=2 tokens=1,2" %%i in ('powershell ^(%gps%^).ParentProcessId ^^^| %% { ^(%gps:PID=_%^).ParentProcessId } ^^^| %% { ^(%gps:PID=_%^) ^^^| ft ParentProcessId^,ProcessId }') do call :log [PROCESS ID: %%~j] [PARENT PROCESS ID: %%~i]& set "pid=%%~j"
+for /f "eol=- skip=2 tokens=1,2" %%i in ('powershell -NoProfile ^(%gps%^).ParentProcessId ^^^| %% { ^(%gps:PID=_%^).ParentProcessId } ^^^| %% { ^(%gps:PID=_%^) ^^^| ft ParentProcessId^,ProcessId }') do call :log [PROCESS ID: %%~j] [PARENT PROCESS ID: %%~i]& set "pid=%%~j"
 call :return pid
 endlocal
 exit /b
@@ -230,7 +230,7 @@ exit /b
 
 :isScriptRunnerProcessUnique <%1 = current process id>
 :: Reinforce that the script runners execute sequentially
-powershell (gcim Win32_Process -f """Name='cmd.exe' and CommandLine like '%%!guid!%%' and ProcessId<>%~1""" -p CommandLine).CommandLine | find /c "%guid%" | find "0" > nul
+powershell -NoProfile (gcim Win32_Process -f """Name='cmd.exe' and CommandLine like '%%!guid!%%' and ProcessId<>%~1""" -p CommandLine).CommandLine | find /c "%guid%" | find "0" > nul
 exit /b
 
 :log <%* = log message>
