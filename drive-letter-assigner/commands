@@ -1,0 +1,13 @@
+# list of commands to be executed by run.cmd
+swap /v:D E
+swap /v:D F
+assign /m:Toshiba 3 G
+assign /m:Kingston W
+assign /m:"Kingston DataTraveler" D
+swap /i:1 W 3
+assign /i:3 K 2
+assign /i:3 K
+swap /v:D M
+assign /m:SD128 I
+swap /v:H M
+swap /v:J O
