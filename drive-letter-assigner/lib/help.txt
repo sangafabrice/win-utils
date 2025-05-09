@@ -1,12 +1,16 @@
 [1mAssign a drive letter to a disk partition.[0m
 
 %commandName% [4mdisk filter option[24m [4mdrive letter[24m [[4mdisk partition number[24m]
+%commandName% [4mvolume letter specifier[24m [4mdrive letter[24m
 
 The [4mdisk filter option[24m must be the first argument and can be:
 /i:[4minteger[24m	The selected disk number.
 	 	It must be a decimal integer.
 /m:[4mstring[24m	The selected disk model substring.
 /s:[4mstring[24m	The selected disk serial number string.
+
+The [4mvolume letter specifier[24m must be the first argument and is:
+/v:[4mchar[24m	The selected volume drive letter.
 
 The positions of the [4mdrive letter[24m and the [4mdisk partition number[24m can be swapped.
 They must be a letter character and a decimal integer, respectively.

@@ -6,32 +6,40 @@
 
 setlocal EnableExtensions EnableDelayedExpansion
 :: Script GUID to easily identify the script runner process
-set guid=/guid:5d972861-1b53-49ea-8d6c-5debe634f8d2& set commandName=%~n0& set commandPath=%~f0& set commandParent=%~dp0& set powershell=powershell -NoProfile -ExecutionPolicy ByPass -File& set lib=!commandParent!\lib& set tempRoot=%temp%\dp-assign-drive-letter& set tempRoot=!tempRoot:\\=\!&
+set guid=/guid:5d972861-1b53-49ea-8d6c-5debe634f8d2& set commandName=%~n0& set commandPath=%~f0& set commandParent=%~dp0& set powershell=powershell -NoProfile -ExecutionPolicy ByPass -File& set lib=!commandParent!\lib& set tempRoot=%temp%\dp-assign-drive-letter& set tempRoot=!tempRoot:\\=\!& set defaultPartitionIndexArg=1&
 :startParsing
 call :dequoteArgument %*
 call :log RUNNING: %commandPath% %returnedArg%
 if "%returnedArg%" equ "%guid%" goto :afterCommand
-cmd /s /c " "%lib%\get_argsCount.cmd" %* "
+cmd /s /c " "%lib%\get_argsCount.cmd" %* " & set argCount=!errorlevel!&
 if errorlevel 4 call :help || goto :farEnd
 if not errorlevel 2 call :help || goto :farEnd
-call :dequoteArgument %~3
-set partitionIndexArg=%returnedArg%& set defaultPartitionIndexArg=1&
-if not defined partitionIndexArg set "partitionIndexArg=%defaultPartitionIndexArg%"
+call :dequoteArgument %~2 & set driverLetterArg=!returnedArg!& set assigneeDiskIndex=& set assignorVolumeId=&
 call :dequoteArgument %~1
+call :isPartitionSpecifierLetter "%returnedArg%" || if not errorlevel 0 ( for /f "tokens=2 delims=:" %%l in ("%returnedArg%") do call :echoError 201 %%~l || goto :farEnd ) else goto :partitionParsing
+if "%argCount%"=="3" call :echoError 201 %~3 || goto :farEnd
+:volumeParsing
+for /f "tokens=2 delims=:" %%l in ("%returnedArg%") do for /f %%L in ('%powershell% "%lib%\convertTo_upperDriveLetter.ps1" %%~l') do (
+	call :isPartitionNot_C_Drive %%~L || goto :farEnd
+	call :getPartitionName %%~L assigneeDiskIndex assigneePartitionIndex assigneePartitionName || call :echoError 209 %%~L || goto :farEnd
+	set "assigneeCurrentLetter=%%~L"
+)
+call :setNonPositionedArgs %driverLetterArg% %defaultPartitionIndexArg% driveLetter || call :echoError 201 %driverLetterArg% || goto :farEnd
+goto :getComputedInfo
+:partitionParsing
 set diskFilterArg=%returnedArg%& set diskSearchFilter=&
 call :getDiskFilterClause diskFilterArg diskSearchFilter || call :echoError 201 %1 || goto :farEnd
-call :dequoteArgument %~2
-set driverLetterArg=%returnedArg%& set assigneeDiskIndex=&
+call :dequoteArgument %~3 & set partitionIndexArg=!returnedArg!&
+if not defined partitionIndexArg set "partitionIndexArg=%defaultPartitionIndexArg%"
 call :setNonPositionedArgs %driverLetterArg% %partitionIndexArg% driveLetter assigneePartitionIndex || call :echoError 202 "%~2" "%partitionIndexArg%" || goto :farEnd
-call :isPartitionNot_C_Drive %driveLetter% || goto :farEnd
 %powershell% "%lib%\get_diskIndex.ps1" "%diskSearchFilter%" %assigneePartitionIndex%
 if errorlevel 0 ( set "assigneeDiskIndex=%errorlevel%" ) else ( if not errorlevel -999 ( call :echoError 203 %assigneePartitionIndex% %errorlevel:-999=% ) else if %errorlevel%==-999 call :echoError 204 ) || goto :farEnd
-:getComputedInfo
-call :getDriveLetter %assigneeDiskIndex% %assigneePartitionIndex% assigneeCurrentLetter || if errorlevel 1 ( goto :stepNext ) else goto :farEnd
+set assigneePartitionName=Disk #%assigneeDiskIndex%, Partition #%assigneePartitionIndex%
+call :getDriveLetter %assigneeDiskIndex% %assigneePartitionIndex% assigneeCurrentLetter || if errorlevel 1 ( goto :getComputedInfo ) else goto :farEnd
 call :isPartitionNot_C_Drive %assigneeCurrentLetter% || goto :farEnd
+:getComputedInfo
+call :isPartitionNot_C_Drive %driveLetter% || goto :farEnd
 if "%driveLetter%"=="%assigneeCurrentLetter%" goto :end
-:stepNext
-:: assignorNextLetter is the letter assigned to the Assignor disk partition after it releases the drive letter 
 set assigneePartitionName=Disk #%assigneeDiskIndex%, Partition #%assigneePartitionIndex%& set assignorNextLetter=%assigneeCurrentLetter%&
 call :echoTitle %driveLetter% "%assigneePartitionName%"
 if defined assigneeCurrentLetter call :echoNeutralWarning 106 "%assigneePartitionName%" %assigneeCurrentLetter%
@@ -107,6 +115,8 @@ set message[206]=ABORT: The letter %~2 was not assigned to the target partition.
 set message[207]=ABORT: Modifying the C partition is not allowed.& goto :_echoMessage
 :_getMessage[208] <%2 = assignee current letter> <%3 = assignee partition name>
 set message[208]=ERROR: Failed to reassign %~2 to "%~3".& goto :_echoMessage
+:_getMessage[209] <%2 = assignee current letter>
+set message[209]=ERROR: The partition assigned %~2 was not found.& goto :_echoMessage
 :_echoMessage
 echo !message[%~1]![0m& echo.
 echo %~1| findstr "202 201" > nul && call :help
@@ -161,6 +171,11 @@ exit /b 1
 echo %~1| find /i /v "C" > nul || call :echoError 207
 exit /b
 
+:isPartitionSpecifierLetter <%1 = partition specifier option>
+echo %~1| findstr /ixrc:"/v:[A-Z]" > nul && exit /b 0
+echo %~1| findstr /ibrc:"/v:" > nul && exit /b -999
+exit /b 999
+
 :log <%* = log message>
 (echo [%date:~4% %time:~0,-3%]%processId% %*>> "%temp%\dp-assign-drive-letter.log") > nul
 exit /b %errorlevel%
@@ -170,6 +185,5 @@ call :_setNonPositionedArgs %* || call :_setNonPositionedArgs %2 %1 %3 %4 || exi
 exit /b 0
 :_setNonPositionedArgs <%1 = argument1> <%2 = argument2> <%3 = [out] drive letter> <%4 = [out] disk partition 0-based index>
 echo _%~1_%~2| findstr /ixrc:"_[A-Z]_[0-9][0-9]*" | findstr /ixvrc:"_[A-Z]_0[0-9][0-9]*" > nul || exit /b 999
-set %~4=%~2&
-for /f %%u in ('%powershell% "%lib%\convertTo_upperDriveLetter.ps1" %~1') do set "%~3=%%~u"
+( if "%~4" neq "" set "%~4=%~2" ) & for /f %%L in ('%powershell% "%lib%\convertTo_upperDriveLetter.ps1" %~1') do set "%~3=%%~L"
 exit /b 0
