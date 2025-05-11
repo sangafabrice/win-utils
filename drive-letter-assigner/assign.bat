@@ -90,7 +90,7 @@ set message[002]=The task completed successfully.& goto :_echoMessage
 :_getMessage[101]
 set message[101]=STOPPED: An instance of the script is already running.& goto :_echoMessage
 :_getMessage[102] <%2 = drive letter>
-set message[102]=ROLL BACK: Failure to reassign %~2 back to its original owner.& goto :_echoMessage
+set message[102]=ROLL BACK: %~2 was reassigned back to its original owner.& goto :_echoMessage
 :_getMessage[103] <%2 = assignor disk partition name>
 set message[103]=WARNING: Failure to assign a new letter to "%~2".& goto :_echoMessage
 :_getMessage[104] <%2 = assignor disk partition name> <%3 = assignor drive letter>
