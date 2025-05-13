@@ -49,16 +49,16 @@ if errorlevel 1 set processId= [%errorlevel%]&
 call :isScriptRunnerProcessUnique %errorlevel% || goto :farEnd
 :assignletter
 call :resetErrorLevel
-if defined assignorPartitionName call :setDpPartitionDriveLetter %assignorDiskIndex% %assignorPartitionIndex% remove || call :echoError 205 %driveLetter% || goto :end
-call :setDpPartitionDriveLetter %assigneeDiskIndex% %assigneePartitionIndex% "assign letter=%driveLetter%" || (
+if defined assignorPartitionName call :setPartitionDriveLetter %assignorDiskIndex% %assignorPartitionIndex% remove || call :echoError 205 %driveLetter% || goto :end
+call :setPartitionDriveLetter %assigneeDiskIndex% %assigneePartitionIndex% "assign letter=%driveLetter%" || (
 	call :echoError 206 %driveLetter%
-	if defined assigneeCurrentLetter call :setDpPartitionDriveLetter %assigneeDiskIndex% %assigneePartitionIndex% "assign letter=%assigneeCurrentLetter%" || call :echoError 208 %assigneeCurrentLetter% "%assigneePartitionName%"
+	if defined assigneeCurrentLetter call :setPartitionDriveLetter %assigneeDiskIndex% %assigneePartitionIndex% "assign letter=%assigneeCurrentLetter%" || call :echoError 208 %assigneeCurrentLetter% "%assigneePartitionName%"
 	call :forceErrorCode
 	set "assignorNextLetter=%driveLetter%"
 )
 if %errorlevel% equ 0 call :echoSuccess 001 %driveLetter%
 if defined assignorNextLetter set "rollbackReassignment= letter=%assignorNextLetter%"
-if defined assignorPartitionName call :setDpPartitionDriveLetter %assignorDiskIndex% %assignorPartitionIndex% "assign%rollbackReassignment%" || if "%assignorNextLetter%"=="%driveLetter%" ( call :echoWarning 102 %driveLetter% ) else call :echoWarning 103 "%assignorPartitionName%"
+if defined assignorPartitionName call :setPartitionDriveLetter %assignorDiskIndex% %assignorPartitionIndex% "assign%rollbackReassignment%" || if "%assignorNextLetter%"=="%driveLetter%" ( call :echoWarning 102 %driveLetter% ) else call :echoWarning 103 "%assignorPartitionName%"
 if defined assignorPartitionName if %errorlevel% equ 0 (
 	if not defined assignorNextLetter call :getDriveLetter %assignorDiskIndex% %assignorPartitionIndex% assignorNextLetter
 	if "%assignorNextLetter%" neq "%driveLetter%" call :echoNeutralWarning 104 "%assignorPartitionName%" !assignorNextLetter!
@@ -228,7 +228,7 @@ exit /b 0
 :return <%1 = error code variable name>
 exit /b !%~1!
 
-:setDpPartitionDriveLetter <%1 = disk 0-based index> <%2 = diskpart disk partition 1-based index> <%3 = operation on the partition>
+:setPartitionDriveLetter <%1 = disk 0-based index> <%2 = diskpart disk partition 1-based index> <%3 = operation on the partition>
 (
 	echo select disk %~1
 	echo select partition %~2
