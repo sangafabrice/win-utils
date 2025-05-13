@@ -211,14 +211,12 @@ exit /b 0
 
 :getVolumeIndex <%1 = drive letter>
 setlocal
-set dpOutput=%temp%\dp-out& 
-(
-	echo select volume=%~1
-	echo list volume
-) > "%dpScript%" && diskpart /s "%dpScript%" > "%dpOutput%" 2>&1
-for /f "tokens=3" %%i in ('type "%dpOutput%" ^| findstr "*"') do endlocal & exit /b %%~i
+cmd /c exit -999
+set dpOutput=%temp%\dp-out&
+echo select volume=%~1 > "%dpScript%" && diskpart /s "%dpScript%" > "%dpOutput%"
+for /f "tokens=2" %%i in ('type "%dpOutput%" ^| findstr /b "Volume"') do cmd /c exit %%~i
 endlocal
-exit /b -999
+exit /b
 
 :help
 call :log ABORT: The task stopped.
