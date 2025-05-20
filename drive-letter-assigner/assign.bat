@@ -228,7 +228,7 @@ exit /b 0
 :return <%1 = error code variable name>
 exit /b !%~1!
 
-:setPartitionDriveLetter <%1 = disk 0-based index> <%2 = diskpart disk partition 1-based index> <%3 = operation on the partition>
+:setPartitionDriveLetter <%1 = disk number> <%2 = partition number> <%3 = remove/assign command>
 (
 	echo select disk %~1
 	echo select partition %~2

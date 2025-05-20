@@ -267,7 +267,7 @@ echo _%~1_%~2| findstr /ixrc:"_[A-Z]_[0-9][0-9]*" | findstr /ixvrc:"_[A-Z]_0[0-9
 ( if "%~4" neq "" set "%~4=%~2" ) & for /f %%L in ('"%commandPath%" call :toUpperDriveLetter %~1') do set %~3=%%~L
 exit /b 0
 
-:setVolumeDriveLetter <%1 = volume specifier> <%2 = operation on the volume>
+:setVolumeDriveLetter <%1 = volume specifier> <%2 = remove/assign command>
 (
 	echo select volume=%~1
 	echo %~2
