@@ -50,15 +50,15 @@ call :isScriptRunnerProcessUnique %errorlevel% || goto :farEnd
 :assignletter
 call :resetErrorLevel
 if defined assignorPartitionName call :setPartitionDriveLetter %assignorDiskIndex% %assignorPartitionIndex% remove || call :echoError 205 %driveLetter% || goto :end
-call :setPartitionDriveLetter %assigneeDiskIndex% %assigneePartitionIndex% "assign letter=%driveLetter%" || (
+call :setPartitionDriveLetter %assigneeDiskIndex% %assigneePartitionIndex% assign letter=%driveLetter% || (
 	call :echoError 206 %driveLetter%
-	if defined assigneeCurrentLetter call :setPartitionDriveLetter %assigneeDiskIndex% %assigneePartitionIndex% "assign letter=%assigneeCurrentLetter%" || call :echoError 208 %assigneeCurrentLetter% "%assigneePartitionName%"
+	if defined assigneeCurrentLetter call :setPartitionDriveLetter %assigneeDiskIndex% %assigneePartitionIndex% assign letter=%assigneeCurrentLetter% || call :echoError 208 %assigneeCurrentLetter% "%assigneePartitionName%"
 	call :forceErrorCode
 	set "assignorNextLetter=%driveLetter%"
 )
 if %errorlevel% equ 0 call :echoSuccess 001 %driveLetter%
 if defined assignorNextLetter set "rollbackReassignment= letter=%assignorNextLetter%"
-if defined assignorPartitionName call :setPartitionDriveLetter %assignorDiskIndex% %assignorPartitionIndex% "assign%rollbackReassignment%" || if "%assignorNextLetter%"=="%driveLetter%" ( call :echoWarning 102 %driveLetter% ) else call :echoWarning 103 "%assignorPartitionName%"
+if defined assignorPartitionName call :setPartitionDriveLetter %assignorDiskIndex% %assignorPartitionIndex% assign%rollbackReassignment% || if "%assignorNextLetter%"=="%driveLetter%" ( call :echoWarning 102 %driveLetter% ) else call :echoWarning 103 "%assignorPartitionName%"
 if defined assignorPartitionName if %errorlevel% equ 0 (
 	if not defined assignorNextLetter call :getDriveLetter %assignorDiskIndex% %assignorPartitionIndex% assignorNextLetter
 	if "%assignorNextLetter%" neq "%driveLetter%" call :echoNeutralWarning 104 "%assignorPartitionName%" !assignorNextLetter!
@@ -228,12 +228,12 @@ exit /b 0
 :return <%1 = error code variable name>
 exit /b !%~1!
 
-:setPartitionDriveLetter <%1 = disk number> <%2 = partition number> <%3 = remove/assign command>
+:setPartitionDriveLetter <%1 = disk number> <%2 = partition number> <%3-5 = remove/assign command>
 (
 	echo select disk %~1
 	echo select partition %~2
-	echo %~3
-) > "%dpScript%" && diskpart /s "%dpScript%" > nul 2>&1
+	echo %~3 %~4 %~5
+) > "%dpScript%" && diskpart /s "%dpScript%" 2> nul | find "successfully" > nul
 exit /b
 
 :setNonPositionedArgs <%1 = argument1> <%2 = argument2> <%3 = [out] drive letter> <%4 = [out] disk partition 0-based index>

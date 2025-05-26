@@ -63,14 +63,14 @@ call :isScriptRunnerProcessUnique %errorlevel% || call :echoWarning 101 || goto 
 :assignletter
 call :resetErrorLevel
 if defined assignorPartitionName call :setVolumeDriveLetter %driveLetter% remove || call :echoError 205 %driveLetter% || goto :end
-call :setVolumeDriveLetter %assigneeCurrentLetter% "assign letter=%driveLetter%" || (
+call :setVolumeDriveLetter %assigneeCurrentLetter% assign letter=%driveLetter% || (
 	call :echoError 206 %driveLetter%
-	call :setVolumeDriveLetter %assigneeDiskIndex% %assigneeDpPartitionIndex% "assign letter=%assigneeCurrentLetter%" || call :echoError 208 %assigneeCurrentLetter% "%assigneePartitionName%"
+	call :setVolumeDriveLetter %assigneeDiskIndex% %assigneeDpPartitionIndex% assign letter=%assigneeCurrentLetter% || call :echoError 208 %assigneeCurrentLetter% "%assigneePartitionName%"
 	call :forceErrorCode
 	set "assignorNextLetter=%driveLetter%"
 )
 if %errorlevel% equ 0 call :echoSuccess 001 %driveLetter%
-if defined assignorPartitionName call :setVolumeDriveLetter %assignorVolumeIndex% "assign letter=%assignorNextLetter%" || if "%assignorNextLetter%"=="%driveLetter%" ( call :echoWarning 102 %driveLetter% ) else call :echoWarning 103 "%assignorPartitionName%"
+if defined assignorPartitionName call :setVolumeDriveLetter %assignorVolumeIndex% assign letter=%assignorNextLetter% || if "%assignorNextLetter%"=="%driveLetter%" ( call :echoWarning 102 %driveLetter% ) else call :echoWarning 103 "%assignorPartitionName%"
 if defined assignorPartitionName if %errorlevel% equ 0 (
 	if not defined assignorNextLetter call :getDriveLetter "%assignorPartitionName%" assignorNextLetter
 	if "%assignorNextLetter%" neq "%driveLetter%" call :echoNeutralWarning 104 "%assignorPartitionName%" !assignorNextLetter!
@@ -210,13 +210,8 @@ for /f "tokens=1,2 skip=1" %%i in ('wmic process where "Name='cmd.exe' and Comma
 exit /b 0
 
 :getVolumeIndex <%1 = drive letter>
-setlocal
-cmd /c exit -999
-set dpOutput=%temp%\dp-out&
-echo select volume=%~1 > "%dpScript%" && diskpart /s "%dpScript%" > "%dpOutput%"
-for /f "tokens=2" %%i in ('type "%dpOutput%" ^| findstr /b "Volume"') do cmd /c exit %%~i
-endlocal
-exit /b
+echo select volume=%~1 > "%dpScript%" && for /f "tokens=2" %%i in ('diskpart /s "%dpScript%" ^| findstr /b "Volume"') do exit /b %%~i
+exit /b -999
 
 :help
 call :log ABORT: The task stopped.
@@ -267,11 +262,11 @@ echo _%~1_%~2| findstr /ixrc:"_[A-Z]_[0-9][0-9]*" | findstr /ixvrc:"_[A-Z]_0[0-9
 ( if "%~4" neq "" set "%~4=%~2" ) & for /f %%L in ('"%commandPath%" call :toUpperDriveLetter %~1') do set %~3=%%~L
 exit /b 0
 
-:setVolumeDriveLetter <%1 = volume specifier> <%2 = remove/assign command>
+:setVolumeDriveLetter <%1 = volume specifier> <%2-4 = remove/assign command>
 (
 	echo select volume=%~1
-	echo %~2
-) > "%dpScript%" && diskpart /s "%dpScript%" > nul 2>&1
+	echo %~2 %~3 %~4
+) > "%dpScript%" && diskpart /s "%dpScript%" 2> nul | find "successfully" > nul
 exit /b
 
 :toUpperDriveLetter <%1 = char argument>
