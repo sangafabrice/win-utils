@@ -14,9 +14,10 @@
 #>
 #Requires -PSEdition Desktop
 
-Get-CimInstance Win32_Process -Filter "ProcessId=$PID" -Property ProcessId,ParentProcessId |
-Select-Object -ExpandProperty ParentProcessId |
-ForEach-Object { Get-CimInstance Win32_Process -Filter "ProcessId=$_" -Property ProcessId,ParentProcessId } |
-Select-Object -ExpandProperty ParentProcessId |
-ForEach-Object { Get-CimInstance Win32_Process -Filter "ProcessId=$_" -Property ProcessId,ParentProcessId } |
-ForEach-Object { Write-Host "$($_.ParentProcessId) $($_.ProcessId)" }
+filter Get-CmdProcess {
+    Get-CimInstance Win32_Process -Filter "ProcessId=$($_.ParentProcessId)" -Property ProcessId,ParentProcessId |
+    Select-Object ProcessId,ParentProcessId
+}
+
+@{ ParentProcessId = $PID } | Get-CmdProcess | Get-CmdProcess | Get-CmdProcess |
+ForEach-Object { Write-Host $_.ParentProcessId $_.ProcessId }
