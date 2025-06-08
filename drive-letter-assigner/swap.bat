@@ -24,7 +24,7 @@ if "%argCount%"=="3" call :echoError 201 %~3 || goto :farEnd
 :volumeParsing
 for /f "tokens=2 delims=:" %%l in ("%returnedArg%") do for /f %%L in ('"%commandPath%" call :toUpperDriveLetter %%~l') do (
 	call :isPartitionNot_C_Drive %%~L || goto :farEnd
-	call :getPartitionName %%~L assigneeDiskIndex assigneePartitionIndex assigneePartitionName || call :echoError 209 %%~L || goto :farEnd
+	call :getPartitionName %%~L: assigneeDiskIndex assigneePartitionIndex assigneePartitionName || call :echoError 209 %%~L || goto :farEnd
 	set "assigneeCurrentLetter=%%~L"
 )
 call :setNonPositionedArgs %driverLetterArg% 0 driveLetter || call :echoError 201 %driverLetterArg% || goto :farEnd
@@ -48,7 +48,7 @@ set assignorNextLetter=& set dpScript=%temp%\dp-bat&
 call :echoTitle %driveLetter% "%assigneePartitionName%"
 call :echoNeutralWarning 106 "%assigneePartitionName%" %assigneeCurrentLetter%
 set "assignorNextLetter=%assigneeCurrentLetter%"
-call :getPartitionName %driveLetter% assignorDiskIndex assignorPartitionIndex assignorPartitionName || goto :command
+call :getPartitionName %driveLetter%: assignorDiskIndex assignorPartitionIndex assignorPartitionName || goto :command
 call :echoNeutralWarning 105 "%assignorPartitionName%" %driveLetter%
 call :getVolumeIndex %driveLetter% & if errorlevel 0 set assignorVolumeIndex=!errorlevel!&
 :command
@@ -196,7 +196,7 @@ exit /b -999
 
 :getPartitionName <%1 = drive letter> <%2 = [out] disk 0-based index> <%3 = [out] disk partition 0-based index> <%4 = [out] disk partition name>
 set %~2=& set %~3=& set %~4=&
-for /f "tokens=2,4 delims=#," %%i in ('wmic logicaldisk where "DeviceID='%~1:'" assoc:list /resultclass:Win32_DiskPartition 2^> nul ^| findstr /b "Name="') do (
+for /f "tokens=2,4 delims=#," %%i in ('wmic logicaldisk where "DeviceID='%~1'" assoc:list /resultclass:Win32_DiskPartition 2^> nul ^| findstr /b "Name="') do (
 	set "%~2=%%~i"
 	set "%~3=%%~j"
 	set "%~4=Disk #%%~i, Partition #%%~j"
